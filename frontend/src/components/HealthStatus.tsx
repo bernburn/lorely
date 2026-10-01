@@ -20,6 +20,6 @@ export default function HealthStatus() {
       <span role="status">{checking ? 'Checking connection…' : health ? `Backend online · Database ${health.database.replaceAll('_', ' ')}` : 'Backend unavailable'}</span>
       <button className="text-button" onClick={() => void check()} disabled={checking}>Check again</button>
     </div>
-    {(health?.message || error) && <p>{health?.message || error}</p>}
+    {(health?.database !== 'connected' || error) && <p>{error || 'Lessons and stories need a connected database. Check the backend connection before trying again.'}</p>}
   </aside>
 }

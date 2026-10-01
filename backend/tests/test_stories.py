@@ -202,6 +202,32 @@ def test_official_sdk_request_contract_and_disabled_internal_retries(monkeypatch
     assert request["response_format"]["schema"] == gemini_schema(GeneratedNewStory)
 
 
+def test_real_sdk_client_construction_does_not_add_a_hidden_retry(monkeypatch):
+    """Exercise actual SDK construction/serialization with an offline HTTP boundary."""
+    from pydantic import BaseModel
+
+    class MinimalResponse(BaseModel):
+        ok: bool
+
+    calls = []
+
+    async def unavailable(client, request, **kwargs):
+        calls.append(request)
+        return httpx.Response(503, request=request, json={
+            "error": {"message": "Controlled service unavailable", "code": "service_unavailable"},
+        })
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", unavailable)
+    with pytest.raises(Exception) as caught:
+        run(unit_ai(None)._request("Set ok to true.", MinimalResponse, 128))
+    assert getattr(caught.value, "status_code", None) == 503
+    assert len(calls) == 1
+    body = json.loads(calls[0].content)
+    assert body["response_format"] == {
+        "type": "text", "mime_type": "application/json", "schema": gemini_schema(MinimalResponse),
+    }
+
+
 def test_gemini_schema_preserves_typed_structure_and_backend_validation():
     schema = gemini_schema(GeneratedNewStory)
     definitions = schema["$defs"]

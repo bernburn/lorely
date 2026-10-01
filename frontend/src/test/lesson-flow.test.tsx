@@ -78,7 +78,7 @@ describe('Phase 1 lesson interactions', () => {
     mount()
     fetchMock.mockImplementation(async input => String(input).endsWith('/api/health') ? json(health) : json({ detail: 'Set MONGODB_URI in backend/.env to save lessons.' }, 503))
     await userEvent.click(screen.getByRole('button', { name: /Try a Sample Lesson/ }))
-    expect((await screen.findByRole('alert')).textContent).toContain('MONGODB_URI')
+    expect((await screen.findByRole('alert')).textContent).toContain('lesson service is temporarily unavailable')
     expect(screen.queryByRole('heading', { name: 'Lesson ready' })).toBeNull()
     await waitFor(() => expect(screen.getByRole('button', { name: /Try a Sample Lesson/ }).hasAttribute('disabled')).toBe(false))
   })

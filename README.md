@@ -2,7 +2,7 @@
 
 Lorely aims to turn educational modules into stories students want to read while keeping the source lesson accurate. `LORELY_SPEC.md` is the source of truth.
 
-**Implemented: Phase 1 and Phase 2 backend.** Upload/save lessons, generate structured Gemini Story Arcs, retrieve Series/Arcs, and continue the same narrative with a new lesson. Phase 2 supports preferences, concepts, Decisions, chapter quizzes, and Story Bible continuity. The frontend remains the Phase 1 lesson interface; the polished reader and personalization UI belong to Phase 3.
+**Implemented: Phase 1, Phase 2 backend, and Phase 3 frontend.** Upload/save lessons, personalize a story, request generation, read chapters, explore concepts, complete Decisions and comprehension checks, and continue the same Series with a new lesson. Production uses the real backend APIs. Full live Gemini Story Arc generation is still unverified; generation errors remain recoverable without substituting fixture stories. Phase 4 has not started.
 
 ## Structure
 
@@ -68,9 +68,9 @@ Vite must restart after development environment changes; production environment 
 
 ## Phase 1 demo and API
 
-1. Open `/` or `/create` and check the connection status.
+1. Open `/`, select **Transform a Lesson**, and check the connection status.
 2. Select **Try a Sample Lesson** to save “Introduction to Computer Networks.”
-3. Confirm the returned Lesson ID and metadata, then select **View extracted text**.
+3. Confirm **Lesson ready**, expand **Saved lesson details**, then select **View extracted text**.
 4. Choose or drop a text-based PDF. Confirm each extracted page through the same lesson detail route.
 5. Try a non-PDF, blank/scanned PDF, or oversized file to see clean errors.
 
@@ -126,7 +126,7 @@ Deploy `backend/` separately with the requirements installed. Run `python -m uvi
 
 ## Phase 2 narrative API
 
-Use `http://localhost:8000/docs` to exercise the engine while the frontend reader is pending.
+The frontend integrates these endpoints. `http://localhost:8000/docs` also provides interactive API documentation.
 
 | Endpoint | Request/result |
 | --- | --- |
@@ -179,6 +179,25 @@ cd backend
 
 Optionally pass `--lesson-id <existing sample Lesson ID>` to reuse a saved sample. Reports distinguish fixture-based persistence from actual Gemini generation and never print secrets. These checks preserve `.env` byte-for-byte. Only run `live` when the minimal configured-model request works. Verification records are retained for inspection; no broad database cleanup is performed.
 
-## Later phases
+## Phase 3 frontend
 
-Phase 3 connects the existing narrative API to personalization, the Story Reader, concept panels, Decisions, chapter checks/locking, continuation and browser progress. Phase 3 has not started.
+Routes: `/` (landing), `/create`, `/read/:arcId`, `/continue/:seriesId`, and `/lessons/:lessonId` (original extracted source). Vercel SPA rewrites preserve direct nested-route access.
+
+Create uses Adventure / Grounded / Just Read / Dramatic / Standard / Senior High / Balanced defaults and an optional 500-character Core Plot. All preferences are editable. Upload and sample selection save real Lessons before generation is enabled. Active requests disable related controls; generation/continuation have no frontend automatic retries or fixture fallback.
+
+The reader uses a 720px reading column and serif prose. Concept terms open a keyboard-accessible definition/story-context dialog, with **View Concepts** for the complete list. Just Read keeps prose uninterrupted; Solve Along reveals narrative after correct Decisions. Every chapter requires all its comprehension checks before unlocking the next. Incorrect answers show a hint, **Retry answer**, and **Review Concept**. Navigation guards enforce the same rules as the disabled controls.
+
+Browser progress stores only revision signatures, current chapter, completed question keys, completion state, and known Series/Arc references. Refresh restores valid progress. Corrupt, stale, unavailable, or inconsistent localStorage recovers safely; full story content stays in MongoDB. Browser progress is a convenience, not an authenticated assessment or tamper-proof grade.
+
+**Continue This Story** loads the real Series and last Arc, keeps Genre/Story Style read-only, defaults editable preferences to the last Arc, and requires a new Lesson. The source text is always available for comparison. Local **Continue Reading** requests only remembered Series; it never lists all database stories.
+
+### Demo and verification
+
+1. Open `/create`, save the sample or upload a text-based PDF, and choose preferences.
+2. Select **Create Story**. Success opens the returned `/read/:arcId`; temporary quota/service errors offer a manual retry.
+3. In a saved Arc, inspect concepts, complete any Decisions, answer all chapter checks, and read onward.
+4. Finish the Arc and open **Continue This Story**. Choose a new Lesson and permitted preferences, then **Continue Story**.
+
+Normal generation and continuation invoke Gemini through FastAPI and require a functioning configured model. Phase 3 UI tests use explicitly labeled deterministic fixtures in `frontend/src/test/`; these are never imported into production routes.
+
+See [Phase 3 verification](frontend/PHASE3_VERIFICATION.md) for the implementation, test results, real backend checks, and remaining live-generation limitation. Phase 4 can begin after separate live Gemini verification.

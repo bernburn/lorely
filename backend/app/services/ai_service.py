@@ -84,8 +84,9 @@ class AIService:
         self.sleep = sleep
 
     async def _request(self, prompt: str, schema: type[Result], max_output_tokens: int) -> str:
-        # In SDK 2.26's Interactions API, attempts is a RETRY count: zero disables
-        # internal retries. Pin this version and contract-test that translation.
+        # SDK 2.26's parent Client mutates attempts=0 to 1 during construction,
+        # then Interactions interprets that 1 as one retry. Restore zero after
+        # construction, before the lazy Interactions client reads these options.
         options = types.HttpOptions(
             timeout=int(self.settings.gemini_request_timeout_seconds * 1000),
             retry_options=types.HttpRetryOptions(attempts=0),
@@ -94,6 +95,7 @@ class AIService:
             api_key=self.settings.gemini_api_key.get_secret_value(),
             vertexai=False, http_options=options,
         ).aio as client:
+            options.retry_options.attempts = 0
             result = await client.interactions.create(
                 model=self.settings.gemini_model,
                 input=prompt,

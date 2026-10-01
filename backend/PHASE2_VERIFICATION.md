@@ -82,3 +82,13 @@ Final upstream exception: `google.genai._gaos.lib.compat_errors.RateLimitError`.
 Keep the model unchanged. Once the project's quota is available (or its billing/tier allows further usage), rerun the minimal check, then one Quick live verification. If HTTP 400 persists, further schema compatibility diagnosis is required; this report does not claim that issue has been proven fixed.
 
 The backend contracts can support future UI work, but full Phase 2 end-to-end acceptance and a confident Phase 3 handoff should wait for real validated/persisted generation, Just Read and continuation. Phase 3 was not begun.
+
+## Later minimal-request diagnosis: configured gemini-3.6-flash
+
+The key and model were left unchanged during this diagnosis. The minimal Boolean schema passed the SDK's request validation and serialization; `response_format` contained `type: text`, `mime_type: application/json`, and the expected JSON Schema.
+
+The first instrumented real request returned HTTP 503. A guard prevented a second HTTP send after discovering that the SDK's parent Client mutates `HttpRetryOptions(attempts=0)` to `1` during initialization; the Interactions bridge then interprets it as one retry. The service now restores zero after Client construction and before accessing the lazy Interactions resource. A regression test using the actual SDK with an offline HTTP boundary proves that a 503 produces exactly one send. All **70 backend tests passed**.
+
+One additional minimal real request was made to verify this concrete correction. It sent exactly once and returned **HTTP 200**. The SDK returned a text value that was not JSON; application parsing failed at `MinimalResponse.model_validate_json()` with **`pydantic_core._pydantic_core.ValidationError`**. Sanitized message: `Invalid JSON: expected value at line 1 column 1 [type=json_invalid]`.
+
+This reproduced failure occurred during JSON parsing/Pydantic validation after the SDK returned, not during request construction. The prior diagnostic did not retain transport status, and Pydantic exceptions do not carry HTTP status, explaining the earlier unspecified status. The minimal schema was accepted by the SDK, but the real response did not satisfy it. No schema weakening, guessed response repair, further inference call, story generation, model/key change, architecture change, or Phase 4 work was performed. Both instrumented runs verified `.env` remained byte-for-byte unchanged.
