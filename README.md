@@ -2,7 +2,9 @@
 
 Lorely aims to turn educational modules into stories students want to read while keeping the source lesson accurate. `LORELY_SPEC.md` is the source of truth.
 
-**Implemented: Phase 1, Phase 2 backend, and Phase 3 frontend.** Upload/save lessons, personalize a story, request generation, read chapters, explore concepts, complete Decisions and comprehension checks, and continue the same Series with a new lesson. Production uses the real backend APIs. Full live Gemini Story Arc generation is still unverified; generation errors remain recoverable without substituting fixture stories. Phase 4 has not started.
+**Phases 1–3 implemented; Phase 4 reliability and integration checks completed with a live-generation blocker.** Save a lesson, personalize a story, read chapters, explore concepts, complete Decisions and comprehension checks, and continue the same Series with a new lesson. Production uses real backend APIs. The minimal configured-model Gemini test succeeded, but full Quick generation remains unverified after upstream 503 responses. See [Phase 4 verification](PHASE4_VERIFICATION.md); generation errors remain recoverable without substituting fixture stories.
+
+**Story Styles:** Allegory explains lesson ideas through fictional parallels; Grounded uses realistic situations; You Decide places the reader in a second-person role. **Interaction Modes:** Just Read keeps the narrative uninterrupted; Solve Along adds educational Decisions. Both require chapter-end comprehension checks. An optional **Core Plot** (500 characters maximum) guides the premise. A **Series** preserves characters and continuity across **Arcs**, each based on a new lesson.
 
 ## Structure
 
@@ -12,7 +14,7 @@ backend/        FastAPI + pydantic-settings + PyMongo Async + pypdf
 LORELY_SPEC.md  Product and engineering requirements
 ```
 
-The existing Next.js starter files are preserved in `lorely-frontend/`. Its Git metadata was moved to the project root, preserving the original commit history and placing both applications in one repository. The starter is not the Phase 1 application. The active application lives in `frontend/` and `backend/`; use these directories for development and deployment. No commit was created; Git will show the starter's original paths as removed and their preserved location as new until you stage the relocation.
+The existing Next.js starter files are preserved in `lorely-frontend/`. The active application lives in `frontend/` and `backend/`; use these directories for development and deployment.
 
 ## Local setup (PowerShell)
 
@@ -157,9 +159,9 @@ Continue with a new saved Lesson ID. Genre/Story Style cannot be supplied in con
 
 `app/prompts/story_generation.py` and `story_continuation.py` distinguish Allegory/Grounded/second-person You Decide and educational depth/prose complexity. Both prioritize the lesson's facts and terms over narrative preferences. Continuation sends only the new lesson, compact Bible, and previous summary, never all historical chapters. Story quality and educational accuracy still require human review; schema validation cannot prove them.
 
-Gemini uses the official asynchronous Interactions API with Pydantic JSON Schema and `store=False`. Each request has at most **three outbound calls total**, shared by transient retries and one possible invalid-output regeneration. SDK retries are disabled. Transient 429/500/502/503/504 and transport timeouts use 1-second then 2-second exponential delays plus up to 250 ms jitter. Each attempt is bounded to 40 seconds by default (`GEMINI_REQUEST_TIMEOUT_SECONDS`, optional 5–60). Permanent failures are not retried; raw responses, SDK errors and credentials are never returned. Exhausted transient retries return HTTP 503 with a clean busy message. Repeated malformed output returns 502. No alternate model or fixture story is used in production.
+Gemini uses the official asynchronous Interactions API with Pydantic JSON Schema and `store=False`. JSON parsing, schema validation, or business-rule failure triggers **one structured regeneration**, retaining the same `response_format`. Independently, there are **two shared transient transport retries**, allowing at most **four outbound calls total**. SDK retries are disabled. Transient 429/500/502/503/504 and transport timeouts use 1-second then 2-second delays plus up to 250 ms jitter. Each attempt is bounded to 40 seconds by default (`GEMINI_REQUEST_TIMEOUT_SECONDS`, optional 5–60). Permanent failures are not retried; raw responses, SDK errors and credentials are never returned. Exhausted transient retries return HTTP 503 with a clean busy message. Repeated malformed output returns 502. No alternate model or fixture story is used in production.
 
-The provider schema uses flat tagged blocks with nullable unused fields to avoid deeply nested object unions. Conversion preserves meaningful content and rejects conflicting fields, then validates the strict public Paragraph/Decision models. Unsupported schema annotations are projected into descriptions; backend constraints remain mandatory. The final full-story schema still requires live verification; see [Phase 2 verification](backend/PHASE2_VERIFICATION.md).
+The provider schema uses flat tagged blocks with nullable unused fields to avoid deeply nested object unions. Conversion preserves meaningful content and rejects conflicting fields, then validates the strict public Paragraph/Decision models. String limits and array upper bounds are expressed as provider description guidance; strict backend limits remain mandatory. The full-story provider schema still requires successful live verification; see [Phase 4 verification](PHASE4_VERIFICATION.md).
 
 Output validators require nonempty chapters/paragraphs and end quizzes, consecutive chapter numbers, unique concepts/choices, valid answer indexes and concept references. Just Read rejects Decisions and can regenerate once; it never silently strips blocks. Solve Along permits meaningful Decisions. Story Bible updates preserve established characters/facts, merge deduplicated history, resolve known threads, and reject incoherent updates. MongoDB collections are `lessons`, `story_series`, and `story_arcs`; a unique `(series_id, arc_number)` index and a compare-and-set Arc-ID update protect concurrent continuations. Arc and Series/Bible writes commit atomically with majority write concern.
 
@@ -171,10 +173,12 @@ Backend tests in `tests/test_stories.py` use **deterministic unit/contract fixtu
 cd backend
 # Deterministic AI output, REAL MongoDB/API writes, transaction abort and stale continuation.
 .\.venv\Scripts\python.exe scripts/verify_phase2.py mongo
-# Minimal REAL structured Gemini request with bounded retries.
+# ONE minimal REAL structured Gemini request; no retry or repair.
 .\.venv\Scripts\python.exe scripts/verify_phase2.py gemini
-# REAL Quick Solve Along, Quick Just Read and Arc 2; consumes Gemini quota.
+# ONE REAL Quick Solve Along generation through normal bounded service handling.
 .\.venv\Scripts\python.exe scripts/verify_phase2.py live
+# Optional ONE Quick Just Read continuation after successful Arc 1; consumes quota.
+.\.venv\Scripts\python.exe scripts/verify_phase2.py live --continue-story
 ```
 
 Optionally pass `--lesson-id <existing sample Lesson ID>` to reuse a saved sample. Reports distinguish fixture-based persistence from actual Gemini generation and never print secrets. These checks preserve `.env` byte-for-byte. Only run `live` when the minimal configured-model request works. Verification records are retained for inspection; no broad database cleanup is performed.
@@ -200,4 +204,6 @@ Browser progress stores only revision signatures, current chapter, completed que
 
 Normal generation and continuation invoke Gemini through FastAPI and require a functioning configured model. Phase 3 UI tests use explicitly labeled deterministic fixtures in `frontend/src/test/`; these are never imported into production routes.
 
-See [Phase 3 verification](frontend/PHASE3_VERIFICATION.md) for the implementation, test results, real backend checks, and remaining live-generation limitation. Phase 4 can begin after separate live Gemini verification.
+See [Phase 3 verification](frontend/PHASE3_VERIFICATION.md) for historical implementation checks and [Phase 4 verification](PHASE4_VERIFICATION.md) for current results and the live-generation limitation.
+
+For the hackathon demo, first verify the configured model is available. Save the networking sample, select Mystery / Grounded / Solve Along / Dramatic / Quick / Senior High / Balanced, and enter: “A group of students discovers an unknown device connected to their school's network.” Generate once, inspect a concept, answer a Decision incorrectly, review the hint, retry correctly, complete every chapter check, refresh after unlocking the next chapter, and finish the Arc. Open **Continue This Story**, supply a new lesson, keep inherited Genre/Story Style, and choose Quick. This live demo remains contingent on successful full Gemini generation; deterministic test stories are not proof of it. No authentication or public rate limiting is included in this MVP.

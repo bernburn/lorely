@@ -14,7 +14,7 @@ The NEW lesson below is the sole educational source for this Arc. Story Bible is
 memory, NOT educational source material. Keep established characters, relationships, setting,
 past events and unresolved threads coherent. Do not retell old Arcs. Give this Arc its own conflict,
 educational focus, progression and climax, with room for subsequent Arcs.
-Return only the Arc and continuityUpdate. New characters must have new names; existing characters
+New characters must have new names; existing characters
 belong in characterUpdates. Do not contradict established facts. Keep updates compact.
 NEW LESSON AND PREFERENCES DATA JSON:
 """ + source_data(lesson, preferences) + "\nNARRATIVE MEMORY DATA JSON:\n" + json.dumps({

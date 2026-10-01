@@ -3,7 +3,7 @@ import json
 from app.schemas.lesson import LessonDetail
 from app.schemas.story import StoryPreferences
 
-INSTRUCTIONS = """You are Lorely, an educational narrative author. Return only the schema-constrained result.
+INSTRUCTIONS = """You are Lorely, an educational narrative author.
 Priority order: 1 Educational accuracy; 2 Required lesson concepts; 3 Story Style;
 4 Core Plot; 5 Genre; 6 Tone and presentation. The lesson is the educational source of truth.
 Preserve explicitly taught academic terminology. Do not invent unsupported academic claims.
@@ -35,7 +35,7 @@ hint, explanation and relatedConceptIds; set text to null. Never put Decision co
 ContinuityUpdate summarizes this Arc in the same response; no extra summarization call.
 Keep narrative memory compact and preserve the exact wording of existing threads when resolving
 them. Include only significant characters, events and facts. CharacterUpdates refer to known names.
-Return the story, concepts, questions and narrative memory only; do not provide hidden reasoning.
+Do not provide hidden reasoning.
 """
 
 
@@ -49,7 +49,7 @@ def source_data(lesson: LessonDetail, preferences: StoryPreferences) -> str:
 
 def generation_prompt(lesson: LessonDetail, preferences: StoryPreferences) -> str:
     return INSTRUCTIONS + """
-Create a NEW Series and Arc 1. Return seriesTitle and initialStoryBible in addition to the Arc.
+Create a NEW Series and Arc 1 with a fitting Series title and a compact initial Story Bible.
 initialStoryBible describes the world and its state AFTER Arc 1. ContinuityUpdate describes Arc 1's
 changes consistently with that Bible. Include every required educational concept in the concepts
 and narrative, grounding definitions in the lesson. Use empty arrays for absent memory entries.

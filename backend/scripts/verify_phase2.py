@@ -2,7 +2,7 @@
 
 mongo: deterministic AI fixtures with REAL MongoDB/API writes and rollback checks.
 gemini: minimal REAL structured Gemini call through the normal AI service.
-live: REAL Quick generation, Just Read, and continuation through the API.
+live: one REAL Quick generation; optional --continue-story creates Arc 2.
 No secret, model output, or raw exception is printed. Existing .env is read-only.
 """
 import argparse
@@ -97,19 +97,23 @@ async def minimal_gemini():
                              "http_status": getattr(error, "status_code", getattr(error, "code", None))})
             raise
 
-    ai.transport = observed_request
     try:
-        result = await ai.generate("Set ok to true.", MinimalResponse, max_output_tokens=128)
+        # Thought tokens also consume max_output_tokens. The old 128-token cap
+        # could truncate even a Boolean response. This opt-in probe sends once.
+        async with asyncio.timeout(ai.settings.gemini_request_timeout_seconds):
+            output = await observed_request("Set ok to true.", MinimalResponse, 512)
+        result = MinimalResponse.model_validate_json(output)
         assert result.ok is True
         report(real_gemini="passed", structured_output=True, model=ai.settings.gemini_model)
-    except HTTPException as error:
-        report(real_gemini="blocked", application_status=error.status_code, clean_message=error.detail,
-               upstream_attempts=upstream)
+    except Exception as error:
+        report(real_gemini="blocked", exception_class=type(error).__module__ + "." + type(error).__name__,
+               http_status=getattr(error, "status_code", getattr(error, "code", None)),
+               clean_message="The single structured check failed; no story was generated.", upstream_attempts=upstream)
         return False
     return True
 
 
-async def api_persistence(*, live: bool, lesson_id: str | None):
+async def api_persistence(*, live: bool, lesson_id: str | None, continue_live: bool = False):
     if live:
         async def observed_live_request(prompt, schema, budget):
             try:
@@ -154,14 +158,8 @@ async def api_persistence(*, live: bool, lesson_id: str | None):
                 report(arc1_persisted_and_retrieved=True, series_id=series.series_id, arc_id=arc.arc_id,
                        solve_along_verified=True, chapters=len(arc.chapters), decisions=decisions, bible_initialized=True)
                 first_ids = list(series.arc_ids)
-                if live:
-                    # One additional Quick story, no redundant Standard/Long requests.
-                    just_read = preferences.model_dump() | {"interaction_mode": "Just Read"}
-                    read_created = require_response(await http.post("/api/stories/generate", json={"lesson_id": lesson_id, "preferences": just_read}), 201)
-                    read_arc = await repo.find_arc(read_created["arc_id"])
-                    assert all(block.type == "paragraph" for chapter in read_arc.chapters for block in chapter.blocks)
-                    assert all(chapter.endQuiz for chapter in read_arc.chapters)
-                    report(real_just_read_verified=True, arc_id=read_arc.arc_id)
+                if live and not continue_live:
+                    return  # One Quick request by default; no extra quota use.
                 new_lesson = require_response(await http.post("/api/lessons/upload", files={
                     "file": ("phase2-network-security-verification.pdf", continuation_pdf(), "application/pdf")}), 201)
                 continued = require_response(await http.post(f"/api/series/{series.series_id}/continue", json={
@@ -231,6 +229,7 @@ async def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=["mongo", "gemini", "live"])
     parser.add_argument("--lesson-id")
+    parser.add_argument("--continue-story", action="store_true", help="Opt in to one live Quick Just Read continuation")
     args = parser.parse_args()
     original_env = (BACKEND / ".env").read_bytes()
     settings = get_settings()
@@ -239,7 +238,7 @@ async def main():
         if args.mode == "gemini":
             success = await minimal_gemini()
         else:
-            await api_persistence(live=args.mode == "live", lesson_id=args.lesson_id)
+            await api_persistence(live=args.mode == "live", lesson_id=args.lesson_id, continue_live=args.continue_story)
             success = True
     finally:
         assert (BACKEND / ".env").read_bytes() == original_env

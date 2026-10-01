@@ -8,7 +8,8 @@ export const preferenceOptions = {
   complexity: ['Easy to Read', 'Balanced', 'Advanced'],
 } as const
 export type StoryPreferences = { [K in keyof typeof preferenceOptions]: typeof preferenceOptions[K][number] } & { core_plot: string }
-export type ContinuationPreferences = Omit<StoryPreferences, 'genre' | 'storytelling_style'>
+// Backend omission/null inherits the previous Arc; genre and style stay read-only.
+export type ContinuationPreferences = { [K in keyof Omit<StoryPreferences, 'genre' | 'storytelling_style'>]?: StoryPreferences[K] | null }
 export const defaultPreferences: StoryPreferences = {
   genre: 'Adventure', storytelling_style: 'Grounded', interaction_mode: 'Just Read',
   tone: 'Dramatic', length: 'Standard', education_level: 'Senior High', complexity: 'Balanced', core_plot: '',

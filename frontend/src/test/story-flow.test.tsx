@@ -206,4 +206,15 @@ describe('continuation and recovery', () => {
     ui.unmount(); fetchMock.mockImplementation(input => String(input).includes('/api/series/') ? Promise.resolve(json({}, 404)) : normalFetch(input)); mount('/')
     await waitFor(() => expect(JSON.parse(localStorage.getItem(HISTORY_KEY)!)).toEqual([]))
   })
+  it('removes a deleted Arc from local Continue Reading, without treating a network failure as deletion', async () => {
+    const saved = [{ series_id: series.series_id, arc_id: solveArc.arc_id }]
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(saved))
+    fetchMock.mockImplementation(input => String(input).includes('/api/arcs/') ? Promise.resolve(json({}, 404)) : normalFetch(input))
+    const ui = mount(`/read/${solveArc.arc_id}`); await screen.findByRole('alert')
+    expect(JSON.parse(localStorage.getItem(HISTORY_KEY)!)).toEqual([])
+    ui.unmount(); localStorage.setItem(HISTORY_KEY, JSON.stringify(saved))
+    fetchMock.mockImplementation(input => String(input).includes('/api/arcs/') ? Promise.reject(new TypeError('offline')) : normalFetch(input))
+    mount(`/read/${solveArc.arc_id}`); await screen.findByRole('alert')
+    expect(JSON.parse(localStorage.getItem(HISTORY_KEY)!)).toEqual(saved)
+  })
 })

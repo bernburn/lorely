@@ -22,6 +22,7 @@ export function rememberStory(story: Pick<StoryCreated, 'series_id' | 'arc_id'>)
   if (isId(story.series_id) && isId(story.arc_id)) write(HISTORY_KEY, [story, ...knownStories().filter(s => s.series_id !== story.series_id)].slice(0, 20))
 }
 export const forgetStory = (id: string) => write(HISTORY_KEY, knownStories().filter(s => s.series_id !== id))
+export const forgetArc = (id: string) => write(HISTORY_KEY, knownStories().filter(s => s.arc_id.toLowerCase() !== id.toLowerCase()))
 function fingerprint(arc: StoryArc) {
   // Store only a revision signature, never a second copy of the story.
   const value = JSON.stringify([arc.created_at, arc.preferences.interaction_mode, arc.chapters, arc.concepts])

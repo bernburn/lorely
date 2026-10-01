@@ -155,6 +155,86 @@ def test_transient_recovery_and_one_validation_repair_share_call_budget():
     assert transport.await_count == 2 and caught.value.detail == INVALID_OUTPUT
 
 
+@pytest.mark.parametrize("output,stage", [
+    ("H", "JSON parsing"),
+    ("Here is the story you requested.", "JSON parsing"),
+    ("", "JSON parsing"),
+    (json.dumps({"title": "Incomplete"}), "schema validation"),
+])
+def test_structured_failure_regenerates_once_under_the_same_contract(output, stage):
+    transport = AsyncMock(side_effect=[output, json.dumps(generated_story())])
+    ai = unit_ai(transport)
+    result = run(ai.generate("original lesson prompt", GeneratedNewStory))
+    assert result.title == "The Unknown Device" and transport.await_count == 2
+    assert ai.sleep.await_count == 0
+    first, repair = transport.call_args_list
+    assert first.args[0] == "original lesson prompt"
+    assert "failed the required structured contract" in repair.args[0]
+    assert stage in repair.args[0]
+    assert first.args[1:] == repair.args[1:] == (GeneratedNewStory, 8192)
+    assert "Here is the story" not in repair.args[0]
+
+
+def test_late_transport_recovery_still_has_one_structured_repair():
+    # Previously two transient errors exhausted MAX_CALLS before JSON repair.
+    transport = AsyncMock(side_effect=[UpstreamError(503), UpstreamError(429), "H", json.dumps(generated_story())])
+    ai = unit_ai(transport)
+    assert run(ai.generate("unit", GeneratedNewStory)).title == "The Unknown Device"
+    assert transport.await_count == 4 and ai.sleep.await_count == 2
+    assert "JSON parsing" in transport.call_args_list[-1].args[0]
+
+
+def test_repair_transport_failures_cannot_reset_the_shared_retry_budget():
+    transport = AsyncMock(side_effect=[UpstreamError(503), "H", UpstreamError(503), UpstreamError(503)])
+    ai = unit_ai(transport)
+    with pytest.raises(HTTPException) as caught:
+        run(ai.generate("unit", GeneratedNewStory))
+    assert caught.value.status_code == 503 and caught.value.detail == BUSY
+    assert transport.await_count == 4 and ai.sleep.await_count == 2
+    assert all("REPAIR" in call.args[0] for call in transport.call_args_list[2:])
+
+
+def test_business_failure_then_valid_regeneration_succeeds():
+    transport = AsyncMock(side_effect=[json.dumps(generated_story(solve=True)), json.dumps(generated_story())])
+    result = run(unit_ai(transport).generate("unit", GeneratedNewStory,
+                 validate=lambda r: r.validate_interaction(StoryPreferences())))
+    assert all(b.type == "paragraph" for c in result.chapters for b in c.blocks)
+    assert transport.await_count == 2 and "Lorely business validation" in transport.call_args_list[-1].args[0]
+
+
+def test_sdk_http200_non_json_repair_and_valid_output(monkeypatch):
+    """Actual SDK response conversion and request serialization, offline HTTP only."""
+    from pydantic import BaseModel
+    class MinimalResponse(BaseModel):
+        ok: bool
+    calls = []
+    async def send(client, request, **kwargs):
+        calls.append(json.loads(request.content))
+        output = "H" if len(calls) == 1 else '{"ok":true}'
+        return httpx.Response(200, request=request, json={
+            "id": "unit-interaction", "status": "completed",
+            "steps": [{"type": "model_output", "content": [{"type": "text", "text": output}]}],
+        })
+    monkeypatch.setattr(httpx.AsyncClient, "send", send)
+    result = run(unit_ai(None).generate("Set ok to true.", MinimalResponse, max_output_tokens=512))
+    assert result.ok is True and len(calls) == 2
+    assert calls[0]["response_format"] == calls[1]["response_format"]
+    assert calls[0]["model"] == calls[1]["model"] == "unit-model"
+    assert "JSON parsing" in calls[1]["input"]
+
+
+def test_http200_invalid_json_after_repair_is_controlled_and_never_persisted(contract_client):
+    client, database = contract_client
+    lesson = client.post("/api/lessons/sample").json()
+    transport = AsyncMock(side_effect=["H", "Still not JSON"])
+    app.dependency_overrides[get_ai_service] = lambda: unit_ai(transport)
+    response = client.post("/api/stories/generate", json={"lesson_id": lesson["lesson_id"]})
+    assert response.status_code == 502 and response.json()["detail"] == INVALID_OUTPUT
+    assert transport.await_count == 2
+    assert not database.documents["story_series"] and not database.documents["story_arcs"]
+    assert database.commits == 0
+
+
 def test_business_validation_is_repaired_once_and_never_silently_stripped():
     transport = AsyncMock(return_value=json.dumps(generated_story(solve=True)))
     with pytest.raises(HTTPException) as caught:
@@ -243,6 +323,17 @@ def test_gemini_schema_preserves_typed_structure_and_backend_validation():
     bad["chapters"][0]["blocks"][0]["text"] = " "
     with pytest.raises(ValidationError):
         GeneratedNewStory.model_validate(bad)
+
+
+def test_provider_complexity_reduction_keeps_strict_array_acceptance_limits():
+    schema = gemini_schema(GeneratedNewStory)
+    blocks = schema["$defs"]["GeminiChapter"]["properties"]["blocks"]
+    assert "maxItems" not in blocks and "maxItems: 40" in blocks["description"]
+    assert blocks["minItems"] == 1
+    data = generated_story()
+    data["chapters"][0]["blocks"] *= 41
+    with pytest.raises(ValidationError):
+        parse_result(GeneratedNewStory, json.dumps(data))
 
 
 def test_flat_gemini_blocks_convert_without_discarding_invalid_content():

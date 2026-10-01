@@ -4,8 +4,8 @@ import ConceptDialog from '../components/ConceptDialog'
 import ConceptText from '../components/ConceptText'
 import Question from '../components/Question'
 import { AI_NOTICE } from '../components/GenerationForm'
-import { getArc, getLesson, getSeries } from '../services/api'
-import { answerQuestion, chapterComplete, decisionKey, finishArc, moveChapter, quizKey, rememberStory, requiredDecisions, restoreProgress, saveProgress, unlockedChapter, type ReadingProgress } from '../services/progress'
+import { ApiError, getArc, getLesson, getSeries } from '../services/api'
+import { answerQuestion, chapterComplete, decisionKey, finishArc, forgetArc, moveChapter, quizKey, rememberStory, requiredDecisions, restoreProgress, saveProgress, unlockedChapter, type ReadingProgress } from '../services/progress'
 import type { StoryArc, StorySeries } from '../types/story'
 import type { LessonDetail } from '../types/lesson'
 
@@ -16,7 +16,10 @@ export default function ReaderPage() {
   const [retry, setRetry] = useState(0)
   useEffect(() => {
     let active = true; setData(null); setError('')
-    void getArc(arcId).then(async arc => {
+    void getArc(arcId).catch(cause => {
+      if (cause instanceof ApiError && cause.status === 404) forgetArc(arcId)
+      throw cause
+    }).then(async arc => {
       const [series, lesson] = await Promise.all([getSeries(arc.series_id), getLesson(arc.lesson_id)])
       if (!series.arc_ids.includes(arc.arc_id) || series.series_id !== arc.series_id || lesson.lesson_id !== arc.lesson_id) throw new Error('This story has incomplete source information. Please try again.')
       if (active) { rememberStory(arc); setData({ arc, series, lesson }) }
