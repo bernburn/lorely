@@ -1,6 +1,6 @@
 # Lorely
 
-Lorely is an AI-assisted learning platform that turns lesson material into interactive stories. Instead of presenting concepts only as static text, Lorely places them inside narrative chapters where learners make decisions, explore key terms, and answer quizzes with immediate feedback.
+Lorely is an AI-assisted learning platform that turns lesson material into interactive stories. Instead of presenting concepts only as static text, Lorely places them inside narrative chapters where learners make decisions, explore educational concepts, and answer quizzes with immediate feedback.
 
 ## Why Lorely?
 
@@ -11,18 +11,15 @@ Lorely addresses these problems by combining:
 - Story-based explanations grounded in the source lesson
 - Interactive decisions that require learners to apply concepts
 - Chapter quizzes with hints and explanations
-- Key-term highlighting and contextual definitions
-- Multilingual story generation
-- Browser-native text-to-speech controls
-- Stable, balanced placement of correct multiple-choice answers
+- Educational concept highlighting and contextual explanations
 
 ## How It Works
 
 1. The user provides lesson content.
-2. The user selects story preferences, including genre, style, reading mode, and language.
+2. The user selects story preferences, including genre, style, and reading mode.
 3. The backend sends a structured generation request to Google Gemini.
 4. Gemini returns a complete educational story arc containing chapters, concepts, decisions, and quizzes.
-5. The backend validates and normalizes the generated data before saving it.
+5. The backend validates the generated data before saving it.
 6. The learner reads the story, explores concepts, completes decisions, and answers chapter quizzes.
 
 ## Core Features
@@ -38,44 +35,15 @@ Lorely uses Google Gemini to generate structured stories directly from lesson ma
 
 ### Educational Concepts
 
-Concepts can be classified as core or supporting terms. Learners can select highlighted terms to view:
+Learners can select highlighted educational concepts to view:
 
 - The lesson definition
 - The meaning of the concept inside the story
-- Alternative forms or aliases when available
-
-### Key Terms Panel
-
-The Story Reader provides a compact reference containing core concepts first, followed by supporting concepts.
+- The connection between the lesson and the current story
 
 ### Decisions and Quizzes
 
 Lorely includes interactive decision blocks and chapter-end questions. Each item can provide a hint and an explanation so the assessment becomes part of the learning process.
-
-### Fair Answer Placement
-
-Generated answer choices pass through a backend normalization step before the StoryArc is saved. This process:
-
-- Preserves every answer choice
-- Preserves the semantically correct answer
-- Reorders choices safely
-- Updates the correct answer index
-- Balances correct-answer positions across the arc
-- Runs only once so answers remain stable after refresh
-
-### Multilingual Learning
-
-Lorely supports generating story content and assessments in the selected language. English and Filipino are the primary supported languages. Academic and technical terms can remain in their familiar English form when translating them would reduce clarity.
-
-### Reading Assistance
-
-Lorely uses the browser Web Speech API for text-to-speech. The reader supports:
-
-- Listen
-- Pause and resume
-- Stop
-- Playback speeds of 0.75x, 1x, 1.25x, and 1.5x
-- Optional key-term highlighting
 
 ## System Architecture
 
@@ -95,17 +63,16 @@ Gemini API   MongoDB
 Generation   StoryArc persistence
 ```
 
-The frontend manages lesson setup and the reading experience. The backend manages prompts, request models, structured-output validation, answer normalization, and persistence. AI and database credentials remain private on the backend.
+The frontend manages lesson setup and the reading experience. The backend manages prompts, request models, structured-output validation, and persistence. AI and database credentials remain private on the backend.
 
 ## Technology Stack
 
 | Layer | Technology | Responsibility |
 | --- | --- | --- |
 | Frontend | Vite and web UI | Lesson setup, Story Reader, concept interactions, decisions, quizzes, and preferences |
-| Backend | FastAPI | API routes, validation, AI orchestration, normalization, and health checks |
+| Backend | FastAPI | API routes, validation, AI orchestration, and health checks |
 | AI | Google Gemini | Structured story, concept, decision, and quiz generation |
 | Database | MongoDB | Persistent StoryArc and series data |
-| Accessibility | Web Speech API | Browser-native text-to-speech |
 | Deployment | Vercel | Independently deployed frontend and backend |
 
 ## Project Structure
@@ -210,9 +177,7 @@ After deployment, verify the complete learner flow:
 5. Select a highlighted concept.
 6. Complete a Solve Along decision.
 7. Complete a chapter quiz.
-8. Refresh the page and confirm that persisted choices remain in the same order.
-9. Test text-to-speech and the highlight toggle.
-10. Generate a story in each supported language.
+8. Refresh the page and confirm that the saved StoryArc loads correctly.
 
 ## Testing Priorities
 
@@ -220,29 +185,22 @@ Important regression coverage includes:
 
 - Structured Gemini responses pass schema validation.
 - Required lesson concepts remain present in the generated StoryArc.
-- Decisions and quizzes preserve the correct semantic answer after normalization.
-- Correct-answer positions vary across newly generated arcs.
-- Saved answer ordering remains stable across repeated retrievals.
 - Existing persisted arcs remain backward compatible.
 - Solve Along progression does not reveal locked story content.
-- Text-to-speech stops when the learner changes chapters or leaves the reader.
-- Generated stories, decisions, hints, explanations, and quizzes use the selected language consistently.
 
 ## Design Principles
 
 - Keep the reading experience editorial and focused.
 - Use AI for structured generation, not unrestricted chat.
 - Validate generated content before it reaches the learner.
-- Preserve technical terminology when translation would reduce clarity.
-- Store normalized story data once and keep it stable when reloaded.
-- Prefer native browser accessibility features when they meet the need.
+- Store generated story data and keep it stable when reloaded.
 - Avoid unnecessary features that distract from the lesson and story loop.
 
 ## Current Scope
 
-Lorely focuses on lesson-to-story generation, interactive reading, concept support, assessments, multilingual output, accessibility, and persistent StoryArcs.
+Lorely focuses on lesson-to-story generation, interactive reading, concept support, assessments, and persistent StoryArcs.
 
-The current scope does not require authentication, gamification, image generation, an AI chat assistant, or a paid text-to-speech provider.
+The current scope does not require authentication, gamification, image generation, or an AI chat assistant.
 
 ## Contributing
 
@@ -258,4 +216,4 @@ Add the project's selected license here. If the repository already contains a li
 
 ## Acknowledgements
 
-Lorely uses Google Gemini for structured educational story generation and the Web Speech API for browser-native reading assistance.
+Lorely uses Google Gemini for structured educational story generation.
